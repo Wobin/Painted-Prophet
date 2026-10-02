@@ -1,0 +1,17 @@
+{
+	"name": "Painted Prophet",
+	"description": "Recolours the Spillway boss fight: pick a colour or a rainbow for Rodin Karnak's green Nurgle ground effects and red warp effects",
+	"version": "1.0.0",
+	"author": "Wobin",
+	"homepage": "https://www.nexusmods.com/warhammer40kdarktide/mods/1385",
+	"source": "https://github.com/Wobin/Painted-Prophet",
+	"funding": {
+		"kofi": "https://ko-fi.com/wobin_dwonderdog"
+	},
+	"nexusId": "1385",
+	"order": {
+		"require": [],
+		"this_after": [],
+		"this_before": ["Polychromatic"]
+	}
+}
