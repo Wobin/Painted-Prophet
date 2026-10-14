@@ -65,11 +65,17 @@ logging** in the mod options to write the same report at launch.
 
 The patched file's state is one of:
 
+- **pending**: the mod is still checking the patched file. This takes a moment after launch.
 - **armed**: installed, the game has not read it yet. Normal before your first mission.
 - **active**: the game has read it.
+- **refused**: a game update changed the original file, so the mod leaves it alone. See After a game
+  update.
 - **stale**: the mod was added or updated by reloading mods while the game already had the original
-  file loaded. This is the only state that shows a notice. Restarting the game clears it; loading
-  another mission should too, though that has not been measured.
+  file loaded. A notice in chat says so. Restarting the game clears it; loading another mission
+  should too, though that has not been measured.
+- **restart**: the check did not finish in time at launch, so the pulse, the red burst body and the
+  green cores keep the game's colours this session. A notice in chat says so. Restarting the game
+  clears it.
 
 ## Install
 

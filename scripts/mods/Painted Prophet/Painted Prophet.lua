@@ -1,7 +1,7 @@
 --[[
 	Name: Painted Prophet
 	Author: Wobin
-	Date: 30/09/2026
+	Date: 14/10/2026
 	Repository: https://github.com/Wobin/Painted-Prophet
 ]]--
 
@@ -576,6 +576,12 @@ local function redirect_opens(stock)
 	return ok and opens or -1
 end
 
+local function redirect_pinned(handle)
+	local pinned = asset_redirect.pinned
+
+	return pinned ~= nil and pinned(handle) == true
+end
+
 local function redirect_served(state)
 	return state == "active" or state == "shared" or state == "compatible"
 end
@@ -584,9 +590,11 @@ local function redirect_is_stale(resident, was_armed, same_payload)
 	return resident and not (was_armed and same_payload)
 end
 
-local function redirect_label(state, is_winner, opens, stale)
+local function redirect_label(state, is_winner, opens, stale, unclaimed, pinned)
 	if state == "restart_required" then
-		if not is_winner then
+		if unclaimed or (pinned and is_winner) then
+			return "restart"
+		elseif not is_winner then
 			return "displaced"
 		end
 	elseif not redirect_served(state) then
@@ -601,42 +609,62 @@ local function redirect_label(state, is_winner, opens, stale)
 end
 
 local _redirect_stale = {}
+local _redirect_settled = {}
+local _redirects_waiting = false
+local _restart_prompted = false
+
+local function evaluate_redirect(store, i)
+	local entry = REDIRECTS[i]
+	local hash = _redirect_handles[i].payload_hash
+	local resident = Application.can_get_resource("material", entry.material)
+	local stale = redirect_is_stale(resident, store.armed[entry.stock] == true, hash ~= nil and store.hash[entry.stock] == hash)
+
+	_redirect_stale[i] = stale
+	_redirect_settled[i] = true
+
+	if not stale and hash ~= nil then
+		store.armed[entry.stock] = true
+		store.hash[entry.stock] = hash
+	end
+end
 
 local function evaluate_redirects()
+	_redirects_waiting = false
+
 	if not asset_redirect then
-		return
+		return false
 	end
 
 	local store = mod:persistent_table("redirect")
+	local settled_now = false
 
 	store.armed = store.armed or {}
 	store.hash = store.hash or {}
 
 	for i = 1, #_redirect_handles do
-		local entry = REDIRECTS[i]
-		local hash = _redirect_handles[i].payload_hash
-		local resident = Application.can_get_resource("material", entry.material)
-		local stale = redirect_is_stale(resident, store.armed[entry.stock] == true, hash ~= nil and store.hash[entry.stock] == hash)
-
-		_redirect_stale[i] = stale
-
-		if not stale and hash ~= nil then
-			store.armed[entry.stock] = true
-			store.hash[entry.stock] = hash
+		if not _redirect_settled[i] then
+			if asset_redirect.state(_redirect_handles[i]) == "pending" then
+				_redirects_waiting = true
+			else
+				evaluate_redirect(store, i)
+				settled_now = true
+			end
 		end
 	end
+
+	return settled_now
 end
 
 local function redirect_state(i)
 	local handle = _redirect_handles[i]
 	local opens = redirect_opens(REDIRECTS[i].stock)
-	local is_winner = asset_redirect.winner(handle) == mod:get_name()
+	local winner = asset_redirect.winner(handle)
 
-	return redirect_label(asset_redirect.state(handle), is_winner, opens, _redirect_stale[i] == true), opens
+	return redirect_label(asset_redirect.state(handle), winner == mod:get_name(), opens, _redirect_stale[i] == true, winner == nil, redirect_pinned(handle)), opens
 end
 
 local function redirect_summary()
-	local served, total, stale = 0, #_redirect_handles, false
+	local served, total, stale, stock_now = 0, #_redirect_handles, false, false
 
 	if asset_redirect then
 		for i = 1, total do
@@ -647,10 +675,34 @@ local function redirect_summary()
 			end
 
 			stale = stale or state == "stale"
+			stock_now = stock_now or state == "restart"
 		end
 	end
 
-	return served, total, stale
+	return served, total, stale or stock_now, stock_now
+end
+
+local function prompt_restart_once()
+	if _restart_prompted then
+		return
+	end
+
+	local _, _, restart, stock_now = redirect_summary()
+
+	if restart then
+		_restart_prompted = true
+		mod:echo(mod:localize(stock_now and "restart_to_apply" or "restart_required"))
+	end
+end
+
+local function settle_redirects()
+	if asset_redirect.ready and not asset_redirect.ready() then
+		return
+	end
+
+	if evaluate_redirects() then
+		prompt_restart_once()
+	end
 end
 
 local function commit_if_first()
@@ -672,9 +724,10 @@ local function open_gate_if_in_level()
 end
 
 local function report(echo)
-	local served, total, restart = redirect_summary()
+	local served, total, restart, stock_now = redirect_summary()
+	local note = stock_now and " (one stays stock this session: restart the game to apply)" or restart and " (one was already loaded: reloads with the next mission or a restart)" or ""
 	local lines = {
-		string_format("Painted Prophet %s: format ok=%s, patched files ready %d of %d%s, gate=%s", tostring(mod.version), tostring(_material_format_ok), served, total, restart and " (one was already loaded: reloads with the next mission or a restart)" or "", tostring(_gameplay_running)),
+		string_format("Painted Prophet %s: format ok=%s, patched files ready %d of %d%s, gate=%s", tostring(mod.version), tostring(_material_format_ok), served, total, note, tostring(_gameplay_running)),
 	}
 
 	for i = 1, #FAMILIES do
@@ -721,6 +774,10 @@ local function report(echo)
 end
 
 mod.update = function()
+	if _redirects_waiting then
+		settle_redirects()
+	end
+
 	if _pending[1] then
 		retry_pending()
 	end
@@ -777,10 +834,8 @@ mod.on_all_mods_loaded = function()
 		mod:echo(mod:localize("game_format_changed"))
 	end
 
-	local _, _, restart = redirect_summary()
-
-	if restart then
-		mod:echo(mod:localize("restart_required"))
+	if not _redirects_waiting then
+		prompt_restart_once()
 	end
 
 	if _debug_logging then

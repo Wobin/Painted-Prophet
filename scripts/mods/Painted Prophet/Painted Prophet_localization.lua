@@ -7,6 +7,7 @@ local localization = {
 	mod_name = { en = "Painted Prophet" },
 	mod_description = { en = "Recolours the Spillway boss fight: pick a colour or a rainbow for Rodin Karnak's green Nurgle ground effects and red warp effects." },
 	restart_required = { en = "Painted Prophet: a patched effect file was installed or changed while the game already had that effect loaded. The shader-patched layers update when the game next loads a mission; restart the game if they do not." },
+	restart_to_apply = { en = "Painted Prophet: a patched effect file could not be applied in time this session, so its shader-patched layers stay stock. Restart the game to apply." },
 	game_format_changed = { en = "Painted Prophet: this game update changed the effect file format. The shader-patched layers stay stock until Painted Prophet is updated." },
 	game_format_unknown = { en = "Painted Prophet: could not read the game's effect file format. The shader-patched layers stay stock this session." },
 	debug_logging = { en = "Debug logging" },
